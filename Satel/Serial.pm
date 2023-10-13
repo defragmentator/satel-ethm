@@ -68,7 +68,7 @@ sub read
     my ($count, $r) = $self->{serial}->read(255);
     if($count > 0)
     {
-	$self->parse_string($r);
+	$self->parse_string_new($r);
     }
 }
 
