@@ -168,6 +168,7 @@ sub do_parse
     my $dzielnik = substr($data,0,2);
 ##print $data."\n\n";
 ## tutaj co trzeba zrobic jak ff jest w tresci albo ffff
+## mozna by uzyc parse_string_new
     @packet= split(/$dzielnik$dzielnik/, substr($data,0,length($data)-2));
     foreach $item (@packet)
     {

@@ -53,8 +53,9 @@ sub send_command
     if($self->{Debug} == 1)
     {
         print "Sent command: ".unpack("H*",$command)."\n";
-	exit;
     }		    	
+#    print STDOUT "UDP z read=1 nie jest jeszcze supportowane po stronie forwardera!\n";
+#    exit;
     $self->{handle}->send($command);
 }
 		

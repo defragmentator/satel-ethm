@@ -31,12 +31,27 @@ sub send
 {
     my $self = shift;
     my $packet = shift;
-
+    my $command = "";
+    
     for(my $i=0; $i<scalar(@{$self->{conns_param}});$i++)
     {
+	#write
 	@{$self->{conns}}[$i]->send($packet);
+
+	#read
+	my $r="";
+	@{$self->{conns}}[$i]->recv($r,1024);
+	if(length($r) > 0)
+	{
+	    #$self->{peer_address} = @{$self->{conns}}[$i]->peerhost();
+	    #$self->{peer_port} = @{$self->{conns}}[$i]->peerport();
+	    $command.=$r;
+	}
+
     }
+    $self->{Parent}->send_command($command);
 }
+						
 
 sub add
 {

@@ -64,7 +64,7 @@ my @pakiety = ( ["\x00",4,'fun','violation 1..32'],
 		["\x54",48,'fun','troubles'],
 		["\x55",17,'fun','output state (old Integra)'],
 ## brak dlugosci!!
-		["\x56",1,'fun','event record'],
+		["\x56",36,'fun','event record'],
 		["\x57",27,'fun','troubles'],
 		["\x58",57,'fun','troubles (old Integra)'],
 		["\x58",61,'fun','troubles'],
@@ -78,7 +78,7 @@ my @pakiety = ( ["\x00",4,'fun','violation 1..32'],
 		["\x5E",49,'fun','troubles'],
 		["\x5F",32,'fun','troubles'],
 ## brak dlugosci!!
-		["\xDF",1,'fun','system names'],
+		["\xFD",21,'fun','system names'],
 		);
 
 my @typy = [];
@@ -129,11 +129,15 @@ sub new
     }
 
     $self->{DB}->{Parent}=$self;
+    $self->{Forwarders}->{Parent}=$self;
     for($i=0; $i < scalar(@typy);$i+=2)
     {
 	@{$self->{$typy[$i]}}=('?') x 129;
     }
     @{$self->{outs}}=('?') x 129;
+    
+    @{$self->{pakiety}}= sort {@{$b}[1] <=> @{$a}[1] }@pakiety;
+    
     # typ integry z automatu     
     bless ($self, $class);
     return $self;
@@ -261,13 +265,47 @@ sub get_event_nr
     }
     elsif($id > 0x7fff && $id < 0x10000)
     {
-	return $self->get_event($id,3);    
+	return $self->get_event($id,3);
     }
-    elsif($id > 0xffff)
+    elsif($id > 0xffff && $id < 0x18000)
     {
-    	return $self->get_event($id-0x8000,4);
+	return $self->get_event($id-0x8000,4);
+    }
+    elsif($id > 0x17fff && $id < 0x20000)
+    {
+	return $self->get_event($id-0x10000,5);
+    }						
+}
+
+sub event_id
+{
+    my $self = shift;
+    my $offset = shift;
+    my $addr = shift;
+
+    if($offset == 2)
+    {
+	return $addr-0x8000;
+    }
+    elsif($offset == 3)
+    {
+	return $addr;
+    }
+    elsif($offset == 4)
+    {
+	return $addr+0x8000;
+    }
+    elsif($offset == 5)
+    {
+	return $addr+0x10000;
+    }
+    else
+    {
+	print "Bledny adress: $addr i offset $offset\n";
+    exit;
     }
 }
+									
 
 sub outs_on
 {
@@ -332,28 +370,27 @@ sub parse_packet()
     }    
     elsif(substr($pakiet,1,1) =~ /\x56/)
     {
-	print "pakiet:".unpack("H*",$pakiet)."\n";
+#	print "pakiet:".unpack("H*",$pakiet)."\n";
         use Satel::Event_Record;
 	if(unpack("H*",substr($pakiet,2,3)) eq "e07e00")
 	{
 	    ## do zapytania pierwszego -0x20
-	    my $id=ord(substr($pakiet,14,1))*0x8000+ord(substr($pakiet,19,1))+ord(substr($pakiet,20,1))*256;
+	    my $id=$self->event_id(ord(substr($pakiet,18,1)),ord(substr($pakiet,19,1))+ord(substr($pakiet,20,1))*256); 
 	    printf "0x%X pierwszy wpis!!\n",$id;
 	    $self->get_event_nr($id-0x20);
 	}
 	
-        if(ord(substr($pakiet,4,1)) > 1 && ord(substr($pakiet,4,1)) < 5)
+        if(ord(substr($pakiet,4,1)) > 1 && ord(substr($pakiet,4,1)) < 6)
 	{
 	    my $id;
 	    for($i=3;$i>-1;$i--)
     	    {
-		$id = (ord(substr($pakiet,4,1))-3)*0x8000+256*ord(substr($pakiet,3,1))+ord(substr($pakiet,2,1))+$i*8;
+		$id=$self->event_id(ord(substr($pakiet,4,1)),256*ord(substr($pakiet,3,1))+ord(substr($pakiet,2,1)))+$i*8;
     		printf STDERR "event: 0x%X\n",$id;
 		$a = new Satel::Event_Record(substr($pakiet,5+$i*8,8));
     		print STDERR $a->parse_record();
 	    }
 	    $self->get_event_nr($id-0x20);
-##	    $self->get_event_nr($id-0x200);
 	  #exit;
 	}
     }
@@ -510,9 +547,12 @@ sub parse_string_new
     my $r = shift;
     my $s = $self->{string}.$r;
 
-    #po dlugosci
-    my @pakiety = sort {@{$b}[1] <=> @{$a}[1] }@pakiety;
-
+    #zeby nie przychodzilo po pol pakietu
+    if(length($s) < 128 ) { $self->{string}=$s; return; }
+ 
+    #po dlugosci - do konstruktora poszlo
+    #my @pakiety = sort {@{$b}[1] <=> @{$a}[1] }@pakiety;
+    my @pakiety =  @{$self->{pakiety}};
 
     while ($s =~ /([\xff\xfe][^\xff\xfe]+.*)/m)
     {
@@ -526,13 +566,13 @@ sub parse_string_new
 	    if(@{$_}[0] eq $chr)
 	    {
 #		print STDOUT "proba dl: (@{$_}[1]+3):\n";
-		if($self->crc_check(substr($pakiet,0,@{$_}[1]+3)))
+		if(length($pakiet) >= @{$_}[1]+3  &&   $self->crc_check(substr($pakiet,0,@{$_}[1]+3)))
 		{
-		    $self->parse_packet(substr($pakiet,0,@{$_}[1]+3));
 		    if($self->{Debug} == 1)
 		    {
 			print STDOUT "@{$_}[3]\n";
 		    }
+		    $self->parse_packet(substr($pakiet,0,@{$_}[1]+3));
 		    #obcinamy s
 		    $s=substr($pakiet,@{$_}[1]+3);
 		    last;
