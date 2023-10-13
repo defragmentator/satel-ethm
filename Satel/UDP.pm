@@ -42,7 +42,7 @@ sub read
     {
 	$self->{peer_address} = $self->{handle}->peerhost();
 	$self->{peer_port} = $self->{handle}->peerport();
-	$self->parse_string($r);
+	$self->parse_string_new($r);
     }
 }
 

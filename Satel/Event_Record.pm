@@ -389,7 +389,8 @@ sub new
     {
         $self->{BITY}    = [];
     }
-
+## to ustalac!!!    
+    $self->{integra_ver}=128;
     bless ($self, $class);
     return $self;
 }
@@ -411,13 +412,13 @@ sub czas()
     my $czas = (ord(@{ $self->{BITY} }[2])&15)*256+ord(@{ $self->{BITY} }[3]);
     my $min = $czas%60;
     my $godz = ($czas-$min)/60;
-    return "$godz:$min";
+    return sprintf("%02d:%02d",$godz,$min);
 }
 
 sub data()
 {
     my $self = shift;
-    return $self->rok()."-".$self->miesiac()."-".$self->dzien();
+    return sprintf("%d-%02d-%02d",$self->rok(),$self->miesiac(),$self->dzien());
 }
 
 sub event_class()
@@ -541,9 +542,96 @@ sub event_param()
     my $id = ($EVENTS{$self->event_code().".".$self->restore()}[0]);
     switch ($id)
     {
-        case 0 { return " no addictional description"; }
-        case 1 { return " partition/zone|expander|keypad"; }
-        case 2 { return " partition/user"; }
+        case 0 { return "";  } #no addictional description
+        case 1
+	{
+	    #partition/zone|expander|keypad";
+	    if($self->source() < 129)
+	    {
+		return "input line ".$self->source();
+	    }
+	    elsif($self->source() > 128 && $self->source() < 193)
+	    {
+		return "expander at address ".($self->source()-129);
+	    }
+	    else
+	    {
+		if($self->{integra_ver} == 24 || $self->{integra_ver} == 32)
+		{
+		    if($self->source() > 192 && $self->source() < 197)
+		    {
+			return "real LCD keypads or INT-RS modules at address ".($self->source()-193);
+		    }
+		    elsif($self->source() > 196 && $self->source() < 201)
+		    {
+			return "keypad in GuardX connected to LCD keypad or www keypad connected to ETHM-1 at address ".($self->source()-197);
+		    }
+		    elsif($self->source() == 201)
+		    {
+			return "keypad in DloadX connected to INTEGRA via RS cable";
+		    }
+		    elsif($self->source() == 202)
+		    {
+			return "keypad in DloadX connected to INTEGRA via TEL link (modem)";
+		    }
+		}
+		else
+		{
+		    if($self->source() > 192 && $self->source() < 201)
+		    {
+			return "real LCD keypads or INT-RS modules at address ".($self->source()-193);
+		    }
+		    elsif($self->source() > 200 && $self->source() < 209)
+		    {
+			return "keypad in GuardX connected to LCD keypad or www keypad connected to ETHM-1 at address ".($self->source()-201);
+		    }
+		    elsif($self->source() == 209)
+		    {
+			return "keypad in DloadX connected to INTEGRA via RS cable";
+		    }
+		    elsif($self->source() == 210)
+		    {
+			return "keypad in DloadX connected to INTEGRA via TEL link (modem)";
+		    }		
+		}
+	    }
+	}
+        case 2
+	{
+	    #partition/user
+	    if($self->source() < 241)
+	    {
+		return "user nr ".$self->source();
+	    }
+	    elsif($self->source() > 240 && $self->source() < 249)
+	    {	    
+		return "master user nr ".$self->source();
+	    }
+	    elsif($self->source() == 249)
+	    {	    
+		return "INT-AV";
+	    }
+	    elsif($self->source() == 251)
+	    {	    
+		return "SMS";
+	    }
+	    elsif($self->source() == 252)
+	    {	    
+		return "timer";
+	    }
+	    elsif($self->source() == 253)
+	    {	    
+		return "function zone";
+	    }
+	    elsif($self->source() == 254)
+	    {	    
+		return "Quick arm";
+	    }
+	    elsif($self->source() == 255)
+	    {	    
+		return "service";
+	    }
+	}
         case 3 { return " partition keypad/user (partition keypad address in PPPPPR) (not LCD keypad, but LED partition keypad, e.g. INT-S)"; }
         case 4 { return " zone|expander|keypad"; }
         case 5 { return " partition"; }
@@ -557,7 +645,7 @@ sub event_param()
 	case 13 { return " partition/output|expander (partition not important for outputs)"; }
         case 14 { return " telephone in PPPPP/user (telephone: 0 - unknown, 1.. - phone number)"; }
         case 15 { return " partition/timer"; }
-    	case 30 { return ord(@{ $self->{BITY} }[6]).".".ord(@{ $self->{BITY} }[7]); }
+    	case 30 { return ord(@{ $self->{BITY} }[6]).".".ord(@{ $self->{BITY} }[7])." keypad nr ".$self->partycja(); }
 	case 31 { return ord(@{ $self->{BITY} }[6]).".".ord(@{ $self->{BITY} }[7]); }
         case 32 { return " partition/zone or ABAX output"; }
     }

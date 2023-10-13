@@ -1,5 +1,7 @@
 package Satel::Forwarders;
 
+use IO::Socket::INET;
+
 sub new
 {
     my $proto = shift;
@@ -40,7 +42,7 @@ sub add
 {
     my $self = shift;
     my %params = @_;
-
+## nie skonczone
 }
 
 1; 

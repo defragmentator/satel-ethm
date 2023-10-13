@@ -54,6 +54,7 @@ sub save_ins
     {
 	if( $ins[$i-1] ne "????????????????????????????????")
 	{
+##	    if($typ =~ /^violation$/) {print "INSERT INTO ins".$i." (ins".$i.", typ".$i.") VALUES(b'".$ins[$i-1]."','".$typ."')\n";}
 	    if ( $dane = $dbh->prepare("INSERT INTO ins".$i." (ins".$i.", typ".$i.") VALUES(b'".$ins[$i-1]."','".$typ."')")) {} else { print "Can't connect $DBI::errstr\n";};    
 	    $dane->execute();
 	}
@@ -100,7 +101,7 @@ sub load_outs
         if ( $dane = $dbh->prepare("DELETE FROM outs_on")) {} else { print "Can't connect $DBI::errstr\n";};
         $dane->execute();
 
-	print "on bity: $b ".length($b)."\n";
+#	print "on bity: $b ".length($b)."\n";
 	@b = split('',$b);
 	unshift(@b,'0');
 	@b = grep {$b[$_] == 1} 0..$#b;
@@ -127,7 +128,7 @@ sub load_outs
         if ( $dane = $dbh->prepare("DELETE FROM outs_off")) {} else { print "Can't connect $DBI::errstr\n";};
         $dane->execute();
 
-	print "off bity: $b ".length($b)."\n";
+#	print "off bity: $b ".length($b)."\n";
 	@b = split('',$b);
 	unshift(@b,'0');
 	@b = grep {$b[$_] == 1} 0..$#b;

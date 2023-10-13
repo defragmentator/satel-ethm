@@ -1,6 +1,8 @@
 package Satel::Ethm;
 
 use Satel::Integra;
+use Satel::EthmProxy;
+
 #use Satel::Exception;
 
 @ISA = ("Satel::Integra");
@@ -12,6 +14,17 @@ sub new
     my(%params) = @_;
     my($self) = Satel::Integra->new(@_);
     $self->{"Password"} = $params{"Password"};
+    
+    if($params{Proxy})
+    {
+        $self->{Proxy}=$params{Proxy};
+    }
+    else
+    {
+        $self->{Proxy} = Satel::EthmProxy->new();
+    }
+    $self->{Proxy}->{Password}=$self->{Password};
+    
     %{$self->{params}} = @_;
     bless ($self,$class);
     return $self;
@@ -47,6 +60,7 @@ sub connect
     $self->{handle} = IO::Socket::INET->new(%{$self->{params}}) || die "can't connect: $!";
     $self->{handle}->autoflush(1);
     $self->{handle}->read($crypted, 16);
+
     $plaintext = $self->{cipher}->decrypt($crypted);
     $nr = substr($plaintext, 0, 1);
 
@@ -56,7 +70,9 @@ sub connect
     }
     $ciphertext = $self->{cipher}->encrypt($nr.$self->ask_pkt());
     $self->{handle}->print(pack("L1",length($ciphertext)).$ciphertext);
-
+    
+    $self->{Proxy}->{header}=$plaintext;
+    
     if($self->{Debug} == 1)
     {
 	print STDOUT "conn OK\n";
@@ -70,6 +86,7 @@ sub send_command
 
     my ($nr,$data) = $self->do_read();
     $self->send_ack($nr,$command);    
+    $self->{Proxy}->send($nr.pack('H*',$data));
     $self->do_parse($data);
 }
 
@@ -111,6 +128,13 @@ sub send_ack
 	}
     	$ciphertext = $self->{cipher}->encrypt($nr.$komenda);
     }
+    elsif(length($self->{Proxy}->{to_send}) > 0)
+    {
+	my $komenda=pack("H*","475244").$self->{Proxy}->{to_send};
+	print "wysylamy: ".unpack('H*',$nr.$komenda)."\n";
+    	$ciphertext = $self->{cipher}->encrypt($nr.$komenda);    
+	$self->{Proxy}->{to_send}="";
+    }
     else
     {
 	$ciphertext = $self->{cipher}->encrypt($nr.$self->ask_pkt());
@@ -126,11 +150,14 @@ sub do_read
     $self->{handle}->read($len, 4);
     $len = unpack("L1",$len);
     $self->{handle}->read($crypted, $len);
+
     my $plaintext  = $self->{cipher}->decrypt($crypted);
     my $nr = substr($plaintext, 0, 1);
     $data=unpack("H* ", substr($plaintext,1));
     
-    return ($nr, $data);
+#    $self->{Proxy}->send($plaintext);
+    
+    return ($nr, $data,);
 }
 
 sub do_parse
@@ -139,7 +166,8 @@ sub do_parse
     my $data = shift;
 
     my $dzielnik = substr($data,0,2);
-
+##print $data."\n\n";
+## tutaj co trzeba zrobic jak ff jest w tresci albo ffff
     @packet= split(/$dzielnik$dzielnik/, substr($data,0,length($data)-2));
     foreach $item (@packet)
     {
@@ -157,6 +185,7 @@ sub read
     my $self = shift;
     my ($nr,$data) = $self->do_read();
     $self->send_ack($nr);    
+    $self->{Proxy}->send($nr.pack('H*',$data));
     $self->do_parse($data);
 }
 

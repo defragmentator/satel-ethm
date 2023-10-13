@@ -4,6 +4,83 @@ use Satel::DB;
 use Satel::Forwarders;
 $|=1;
 
+#dl pakietu len +3 bajty (ff|fe + pocz_id + crc)
+my @pakiety = ( ["\x00",4,'fun','violation 1..32'],
+		["\x00",5,'fun','violation 65..96'],
+		["\x01",4,'fun','violation 33..64'],
+		["\x01",5,'fun','violation 97..128'],
+		["\x02",4,'fun','tamper 1..32'],
+		["\x02",5,'fun','tamper 65..96'],
+		["\x03",4,'fun','tamper 33..64'],
+		["\x03",5,'fun','tamper 97..128'],
+		["\x04",4,'fun','alarm 1..32'],
+		["\x04",5,'fun','alarm 65..96'],
+		["\x05",4,'fun','alarm 33..64'],
+		["\x05",5,'fun','alarm 97..128'],
+		["\x06",4,'fun','tamper alarm 1..32'],
+		["\x06",5,'fun','tamper alarm 65..96'],
+		["\x07",4,'fun','tamper alarm 33..64'],
+		["\x07",5,'fun','tamper alarm 97..128'],
+		["\x08",4,'fun','alarm memory 1..32'],
+		["\x08",5,'fun','alarm memory 65..96'],
+		["\x09",4,'fun','alarm memory 33..64'],
+		["\x09",5,'fun','alarm memory 97..128'],
+		["\x0A",4,'fun','tamper alarm memory 1..32'],
+		["\x0A",5,'fun','tamper alarm memory 65..96'],
+		["\x0B",4,'fun','tamper alarm memory 33..64'],
+		["\x0B",5,'fun','tamper alarm memory 97..128'],
+		["\x0C",4,'fun','bypasses 1..32'],
+		["\x0C",5,'fun','bypasses 65..96'],
+		["\x0D",4,'fun','bypasses 33..64'],
+		["\x0D",5,'fun','bypasses 97..128'],
+		["\x0E",4,'fun','no violation trouble 1..32'],
+		["\x0E",5,'fun','no violation trouble 65..96'],
+		["\x0F",4,'fun','no violation trouble 33..64'],
+		["\x0F",5,'fun','no violation trouble 97..128'],
+		["\x10",4,'fun','long violation trouble 1..32'],
+		["\x10",5,'fun','long violation trouble 65..96'],
+		["\x11",4,'fun','long violation trouble 33..64'],
+		["\x11",5,'fun','long violation trouble 97..128'],
+		["\x12",4,'fun','armed partitions (with suppressed status)'],
+		["\x12",5,'fun','really armed partitions (without suppressed status)'],
+		["\x13",4,'fun','partitions with entry time'],
+		["\x13",5,'fun','partitions temporary blocked'],
+		["\x14",4,'fun','partitions with exit time >10sec.'],
+		["\x14",5,'fun','partitions blocked for guard round'],
+		["\x15",4,'fun','partitions with exit time <10sec.'],
+		["\x15",5,'fun','partitions with arming mode 2'],
+		["\x16",4,'fun','partitions with alarm'],
+		["\x16",5,'fun','partitions with arming mode 3'],
+		["\x17",4,'fun','partitions with fire alarm'],
+		["\x18",4,'fun','partitions with alarm memory'],
+		["\x18",5,'fun','partitions with verified alarm memory'],
+		["\x19",4,'fun','partitions with fire alarm memory'],
+		["\x1A",4,'fun','partitions with 1st code entered'],
+		["\x1A",7,'fun','date and time'],
+		["\x1C",4,'fun','outputs state in INTEGRA 24'],
+		["\x1C",5,'fun','outputs state in INTEGRA 32'],
+		["\x1C",9,'fun','outputs state in INTEGRA 64 / opened and long opened doors - INTEGRA 24, 32 and 128-WRL'],
+		["\x1C",17,'fun','outputs state in INTEGRA 128 and 128-WRL / opened and long opened doors - INTEGRA 64 and 128'],		
+		["\x54",48,'fun','troubles'],
+		["\x55",17,'fun','output state (old Integra)'],
+## brak dlugosci!!
+		["\x56",1,'fun','event record'],
+		["\x57",27,'fun','troubles'],
+		["\x58",57,'fun','troubles (old Integra)'],
+		["\x58",61,'fun','troubles'],
+		["\x59",30,'fun','troubles'],
+		["\x5A",48,'fun','troubles'],
+		["\x5B",27,'fun','troubles (old Integra)'],
+		["\x5B",40,'fun','troubles'],
+		["\x5C",57,'fun','troubles (old Integra)'],
+		["\x5C",61,'fun','troubles'],
+		["\x5D",30,'fun','troubles'],
+		["\x5E",49,'fun','troubles'],
+		["\x5F",32,'fun','troubles'],
+## brak dlugosci!!
+		["\xDF",1,'fun','system names'],
+		);
+
 my @typy = [];
 $typy[0]="violation";
 $typy[1]="violation";
@@ -72,7 +149,7 @@ sub crc_check()
 	if($self->{Debug} == 1)
 	{
 	    $a=unpack("H*",$pakiet);
-	    print "$a - BAD CRC\n";
+	    print "$a - BAD CRC powinno byc ".unpack("H*",$self->crc(substr($pakiet,0,length($pakiet)-1)))."\n";
 	}
             return 0;
     }
@@ -100,6 +177,7 @@ sub outs_do
     my $komenda = $cmd.$self->code1().$outs;
     $komenda.=$self->pack_xor($komenda);
     $komenda.=$self->crc($komenda);
+    $komenda=$self->ff_encode($komenda);
     $komenda=chr(hex("FF")).chr(hex("FF")).$komenda.chr(hex("FF")).chr(hex("AA"));								
 
 #print unpack("H*",$cmd)." ".unpack("H16",$outs)." - ".length($outs)."\n".unpack("H*",$komenda)."\n";
@@ -113,6 +191,82 @@ sub code1
     $code=substr($self->{Code}."AAAAAAAAAAAAAAAA",0,16);
     $code =~ s/([a-fA-F0-9][a-fA-F0-9])/chr(hex($1))/eg;
     return $code;
+}
+
+sub code2
+{
+    my $self = shift;
+    my $code2 = "";
+    foreach $byte (split //, $self->{Code})
+    {
+	$code2.=sprintf("%x",15-$byte);
+    }
+    $code2.="00000000";
+    $code2=substr($code2,0,8);
+    $code2 =~ s/([a-fA-F0-9][a-fA-F0-9])/chr(hex($1))/eg;
+    return $code2;
+}
+
+sub ff_encode
+{
+    my $self = shift;
+    my $command = shift;
+    my $command2 = "";
+    foreach $byte (split //, $command)
+    {
+	$command2.=$byte;
+	if(ord($byte) == 0xff){	$command2.=chr(0);}
+    }
+    return $command2;
+}
+
+sub get_event_begin
+{
+    my $self = shift;
+    $self->get_event(0x7ee0,0);
+}
+
+sub get_event
+{
+    my $self = shift;
+    my $adres = shift;
+    my $offset = shift;
+    $command= chr(hex(55));
+    $command.=$self->code2();
+    $command.=pack("v*",$adres);
+    $command.= chr(hex($offset));
+    $command.=$self->crc($command);
+    $command.=$self->crc($command);
+    $command=$self->ff_encode($command);
+    $command=chr(0xff).chr(0xff).$command.chr(0xff).chr(0xaa);    
+    $self->send_command($command);
+    
+#    print unpack("H*",$command)."\n";
+}
+
+sub get_event_nr
+{
+#dla 2 pytac o  8000+adr (4000-8000) , dla 3 pytac adr (8000-ffff).
+# dla 4 pytac adr-8000 (10000-17fff)
+    my $self = shift;
+    my $id = shift;
+    if($id < 0x4000)
+    {
+	print "Blad - nie ma wpisow ponizej 4000!\n";
+	exit;
+    }
+    elsif($id > 0x3fff && $id < 0x8000)
+    {
+	return $self->get_event(0x8000+$id,2);
+    }
+    elsif($id > 0x7fff && $id < 0x10000)
+    {
+	return $self->get_event($id,3);    
+    }
+    elsif($id > 0xffff)
+    {
+    	return $self->get_event($id-0x8000,4);
+    }
 }
 
 sub outs_on
@@ -130,7 +284,6 @@ sub outs_off
     $self->outs_do("\x76",@to_on);
     
 }
-
 
 sub pack_xor()
 {
@@ -163,6 +316,8 @@ sub parse_packet()
 
     if(! $self->crc_check($pakiet))  { return; }
     $self->{Forwarders}->send($pakiet);
+##    print "pakiet:".unpack("H*",$pakiet)."\n";
+
     
     if(substr($pakiet,1,1) =~ /\x1a/ && length($pakiet)==10)
     {
@@ -175,6 +330,33 @@ sub parse_packet()
 	$self->{time} = substr($pak,8,2).":".substr($pak,6,2).":".substr($pak,4,2)." ".substr($pak,10,2).".".
 		substr($pak,12,2).".20".substr($pak,14,2);
     }    
+    elsif(substr($pakiet,1,1) =~ /\x56/)
+    {
+	print "pakiet:".unpack("H*",$pakiet)."\n";
+        use Satel::Event_Record;
+	if(unpack("H*",substr($pakiet,2,3)) eq "e07e00")
+	{
+	    ## do zapytania pierwszego -0x20
+	    my $id=ord(substr($pakiet,14,1))*0x8000+ord(substr($pakiet,19,1))+ord(substr($pakiet,20,1))*256;
+	    printf "0x%X pierwszy wpis!!\n",$id;
+	    $self->get_event_nr($id-0x20);
+	}
+	
+        if(ord(substr($pakiet,4,1)) > 1 && ord(substr($pakiet,4,1)) < 5)
+	{
+	    my $id;
+	    for($i=3;$i>-1;$i--)
+    	    {
+		$id = (ord(substr($pakiet,4,1))-3)*0x8000+256*ord(substr($pakiet,3,1))+ord(substr($pakiet,2,1))+$i*8;
+    		printf STDERR "event: 0x%X\n",$id;
+		$a = new Satel::Event_Record(substr($pakiet,5+$i*8,8));
+    		print STDERR $a->parse_record();
+	    }
+	    $self->get_event_nr($id-0x20);
+##	    $self->get_event_nr($id-0x200);
+	  #exit;
+	}
+    }
     elsif(substr($pakiet,1,1) =~ /\x55/)
     {
 	if($self->{Debug} == 1)	{$self->debug_outs_old($pakiet)}
@@ -219,6 +401,17 @@ sub parse_packet()
     	    print "armed \n";
     	    print "hex:".unpack("H*",substr($pakiet,1,length($pakiet)-2))."\n";
 	}
+    }
+    elsif(substr($pakiet,1,3) =~ /\xfd\x16\x05/)
+    {
+	$in = ord(substr($pakiet,5,1));
+	$name = substr($pakiet,8,16);
+	print STDOUT "wejscie$in: $name\n";
+    }
+    elsif(substr($pakiet,1,1) =~ /\xfd/)
+    {
+	$name = substr($pakiet,8,16);
+	print STDOUT "fd15: $name\n";
     }
     else
     {
@@ -310,6 +503,49 @@ sub debug_ins
     print "\n";
     print "0".unpack("b32*",substr($pakiet,2,4))."\n";	
 }
+
+sub parse_string_new
+{
+    my $self = shift;
+    my $r = shift;
+    my $s = $self->{string}.$r;
+
+    #po dlugosci
+    my @pakiety = sort {@{$b}[1] <=> @{$a}[1] }@pakiety;
+
+
+    while ($s =~ /([\xff\xfe][^\xff\xfe]+.*)/m)
+    {
+	my $pakiet = $1;
+	my $chr = substr($pakiet,1,1);
+
+#	print unpack("H*",$pakiet)."\n";
+
+	foreach (@pakiety)
+	{
+	    if(@{$_}[0] eq $chr)
+	    {
+#		print STDOUT "proba dl: (@{$_}[1]+3):\n";
+		if($self->crc_check(substr($pakiet,0,@{$_}[1]+3)))
+		{
+		    $self->parse_packet(substr($pakiet,0,@{$_}[1]+3));
+		    if($self->{Debug} == 1)
+		    {
+			print STDOUT "@{$_}[3]\n";
+		    }
+		    #obcinamy s
+		    $s=substr($pakiet,@{$_}[1]+3);
+		    last;
+		}
+	    }
+	
+	}
+	#jezeli nadal nic to obcinamy 1 zn z przodu (ale jezeli nadal nic to wypadaloby to dac do s->{string}) 
+	$s=substr($pakiet,1);
+    }
+    $self->{string}=$s;
+}
+			    
 
 sub parse_string
 {
